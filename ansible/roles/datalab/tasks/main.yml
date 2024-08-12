@@ -39,6 +39,45 @@
     env_files:
       - /home/{{ ansible_ssh_user }}/datalab/pydatalab/.env
 
+- name: Check whether ssh config exists
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/vaults/datalab/.ssh/config"
+  register: ssh_config
+  delegate_to: localhost
+
+- name: Set fact for whether ssh config exists
+  ansible.builtin.set_fact:
+    ssh_config_defined: "{{ ssh_config.stat.exists }}"
+
+- name: Sync local ssh config vault remote
+  when: ssh_config_defined
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/vaults/datalab/.ssh"
+    dest: /home/{{ ansible_ssh_user }}/.ssh
+    mode: "0700"
+
+- name: List all SSH config files & keys
+  when: ssh_config_defined
+  ansible.builtin.find:
+    paths: /home/{{ ansible_ssh_user }}/.ssh/
+    patterns: "*"
+  register: ssh_files_glob
+
+- name: Create .ssh folder in container
+  when: ssh_config_defined
+  community.docker.docker_container_exec:
+    container: datalab-api-1
+    command: mkdir -p /root/.ssh
+
+- name: Copy SSH config and credentials into container
+  when: ssh_config_defined
+  community.docker.docker_container_copy_into:
+    container: datalab-api-1
+    path: "{{ item.path }}"
+    container_path: /root/.ssh/{{ item.path | basename }}
+    mode: "0700"
+  loop: "{{ ssh_files_glob.files }}"
+
 - name: Build and launch app container
   community.docker.docker_compose_v2:
     project_src: /home/{{ ansible_ssh_user }}/datalab
@@ -56,3 +95,21 @@
     day: "*"
     month: "*"
     job: cd /home/{{ ansible_ssh_user }}/datalab; docker compose exec api pipenv run invoke admin.create-backup --strategy-name daily-snapshots
+
+- name: Add weekly backup task to crontab
+  ansible.builtin.cron:
+    name: Weekly snapshots
+    minute: "5"
+    hour: "5"
+    day: "7"
+    month: "*"
+    job: cd /home/{{ ansible_ssh_user }}/datalab; docker compose exec api pipenv run invoke admin.create-backup --strategy-name weekly-snapshots
+
+- name: Add quarterly backup task to crontab
+  ansible.builtin.cron:
+    name: Quarterly snapshots
+    minute: "5"
+    hour: "2"
+    day: "1"
+    month: 1,4,7,10
+    job: cd /home/{{ ansible_ssh_user }}/datalab; docker compose exec api pipenv run invoke admin.create-backup --strategy-name quarterly-snapshots
