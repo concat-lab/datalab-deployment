@@ -80,7 +80,7 @@ These instructions assume you have prepared the server on which you would like
 to deploy *datalab*, and that it is:
 
 - accessible via SSH (using your local SSH config),
-- running Ubuntu 22.04 or a similar distro with `apt` available.
+- running one of the supported Linux distributions, e.g., Ubuntu 24.04 (see [Supported distributions](#supported-distributions)),
 
 It also assumes that your local machine is running a Unix-like OS (Linux, WSL, macOS) with `git` and `bash`,
 `make` and `sed` available.
@@ -92,7 +92,9 @@ We recommend using [uv](https://astral.sh/uv) for this, as the included [Makefil
 environment.
 
 ```shell
-git clone --recurse-submodules git@github.com:datalab-org/datalab-ansible-terraform
+git clone git@github.com:datalab-industries/datalab-ansible-terraform
+git submodule init
+git submodule update
 cd datalab-ansible-terraform
 uv venv --python 3.12
 uv pip install -r requirements.txt
@@ -101,7 +103,9 @@ uv pip install -r requirements.txt
 or alternatively,
 
 ```shell
-git clone --recurse-submodules git@github.com:datalab-org/datalab-ansible-terraform
+git clone git@github.com:datalab-industries/datalab-ansible-terraform
+git submodule init
+git submodule update
 cd datalab-ansible-terraform
 make install-ansible
 ```
@@ -135,6 +139,10 @@ ungrouped:
       prometheus_remote_write_url: <your_prometheus_instance_url, e.g., https://grafana.datalab.industries/prometheus/api/v1/write>
       prometheus_user: <your_prometheus_username>
       prometheus_password: <your_prometheus_password>
+      extras:   # (See discussion "Running additional containers" below)
+        <service_name>:
+          url: <service_url>
+          port: <service_port>
 ```
 
 where `<hostname>` and the various setting should be configured with your chosen
@@ -193,6 +201,17 @@ make
 ```
 
 If completed successfully, the server should now be running a *datalab* instance at your configured URLs!
+
+#### Supported distributions
+
+The Ansible playbooks have been tested on Ubuntu (22.04, 24.04) and Red Hat Enterprise Linux 9.7, and will likely work on any Debian-based distribution that uses `apt` and `systemd`.
+
+As the *datalab* deployment itself is containerised, as long as Docker can be installed independently of the playbooks, then the deployment playbook should work on any distribution, but some features
+will not be available (e.g., automatic mounting of data disks, fail2ban, etc.) if the underlying OS is not supported by the playbooks.
+
+If you need to support for a specific Linux distribution, please raise an
+issue on GitHub at [datalab-industries/datalab-ansible-terraform](https://github.com/datalab-industries/datalab-ansible-terraform/issues).
+Official support will not be provided for Windows or macOS as target servers.
 
 #### Keeping things up to date
 
@@ -338,6 +357,54 @@ and then running the playbook with the `monitoring` tag:
 ```shell
 make monitoring
 ```
+
+#### Running additional containers
+
+It is often the case that users wish to run additional services alongside *datalab* on the same server.
+This can be achieved by populating the `./src/extras` directory with directories (ideally git submodules) containing containerised applications with their own `Dockerfile` (e.g., `./src/extras/service_A/Dockerfile`) and then a top-level `./src/extras/docker-compose.yml` file that configures all extras, e.g.,
+
+```yaml
+name: extras
+services:
+  service_A:
+    build:
+      context: service_A
+    restart: unless-stopped
+    ports:
+      - "5002:5001"
+
+networks:
+  backend:
+    driver: bridge
+```
+
+Currently it is recommended that the services expose a port rather than using Docker networking directly, but this constraint may be lifted in future.
+
+The ansible role `./ansible/roles/extras` will build and launch these containers alongside the main *datalab* stack when the playbook is run with the `extras` tag.
+Finally, the service needs to be listed in `./ansible/inventory.yml` in the `extras` section, so that NGINX can generate the correct reverse proxy rules, e.g.,
+
+```yaml
+  extras:
+    service_A:
+      url: service_A.example.com
+      port: 5002
+```
+
+which will be mapped to the (abridged) NGINX config snippet:
+
+```config
+server {
+  listen 443 ssl;
+
+  # set the correct host(s) for your site
+  server_name service_A.example.com;
+
+  location / {
+    proxy_pass http://localhost:5002;
+  }
+
+```
+
 
 ### Cloud provisioning
 
