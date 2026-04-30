@@ -4,3 +4,6 @@
 [submodule "src/datalab"]
 	path = src/datalab
 	url = git@github.com:datalab-org/datalab
+[submodule "src/plugins/datalab-app-plugin-tubgeneric"]
+	path = src/plugins/datalab-app-plugin-tubgeneric
+	url = https://github.com/concat-lab/datalab-app-plugin-tubgeneric
