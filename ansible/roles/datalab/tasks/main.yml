@@ -146,12 +146,3 @@
     weekday: "7"
     month: "*"
     job: cd {{ ansible_user_home_dir }}/datalab; docker compose exec api /opt/.venv/bin/python -m invoke admin.create-backup --strategy-name weekly-snapshots
-
-- name: Add quarterly backup task to crontab
-  ansible.builtin.cron:
-    name: Quarterly snapshots
-    minute: "5"
-    hour: "2"
-    day: "1"
-    month: 1,4,7,10
-    job: cd {{ ansible_user_home_dir }}/datalab; docker compose exec api /opt/.venv/bin/python -m invoke admin.create-backup --strategy-name quarterly-snapshots
