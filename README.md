@@ -31,6 +31,8 @@ Attempts will be made to tabulate the supported versions of datalab with each re
 | v0.4.x | v0.5.x |
 | v0.5.x | v0.6.x |
 | v0.6.x | v0.6.x |
+| v0.7.x | v0.7.x-rc.x |
+| v0.8.x | v0.7.x |
 
 </div>
 
@@ -205,7 +207,7 @@ If completed successfully, the server should now be running a *datalab* instance
 
 #### Supported distributions
 
-The Ansible playbooks have been tested on Ubuntu (22.04, 24.04) and Red Hat Enterprise Linux 9.7, and will likely work on any Debian-based distribution that uses `apt` and `systemd`.
+The Ansible playbooks have been tested on Ubuntu (22.04, 24.04) and Red Hat Enterprise Linux 9.7, and will likely work on any Debian-based distribution that uses `apt` and `systemd` with minor modifications.
 
 As the *datalab* deployment itself is containerised, as long as Docker can be installed independently of the playbooks, then the deployment playbook should work on any distribution, but some features
 will not be available (e.g., automatic mounting of data disks, fail2ban, etc.) if the underlying OS is not supported by the playbooks.
@@ -256,6 +258,35 @@ make list
 ```
 
 to list all of the available Ansible tags that can be run individually.
+
+#### Installing *datalab* plugins
+
+*datalab* supports first-party and third-party plugins (custom data blocks, etc.) which extend the API server.
+Plugins can be declared in a `plugins.toml` file at the root of the *datalab* repository (alongside `pydatalab/` and `webapp/`) and installed by the `invoke dev.install` task during the API image build; see the upstream [plugins documentation](https://docs.datalab-org.io/en/latest/plugins/) for the file format and the full description of the install procedure.
+
+To install plugins on a server deployed with this repository:
+
+1. Edit the `plugins.toml` at `./src/plugins.toml`.
+   The Ansible role copies it into place on the remote so the Dockerfile picks it up at build time.
+   Example:
+   ```toml
+   dependencies = [
+       "datalab-app-plugin-insitu",
+       "my-local-plugin",
+   ]
+
+   [tool.uv.sources]
+   datalab-app-plugin-insitu = { git = "https://github.com/datalab-org/datalab-app-plugin-insitu.git", rev = "v0.4.1" }
+   my-local-plugin = { path = "pydatalab/plugins/my-local-plugin" }
+   ```
+2. Any local or private plugins can be added as git submodules under `./src/plugins/<plugin-name>/`.
+   These will be synced to the remote; the `plugins.toml` path should then refer to `pydatalab/plugins/<plugin-name>`, which is the corresponding path on the server.
+3. Run `make deploy`.
+   The API container is rebuilt with the plugins baked in.
+   Removing `./src/plugins.toml` and redeploying reverts to the base (plugin-free) lockfile.
+
+> [!WARNING]
+> Plugins run with full API server privileges; only install plugins from sources you trust.
 
 #### Bitwarden integration
 
