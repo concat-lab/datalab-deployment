@@ -1,0 +1,6 @@
+dependencies = ["datalab-app-plugin-xps", "datalab-app-plugin-tubgeneric"]
+
+[tool.uv.sources]
+datalab-app-plugin-xps = { git = "https://github.com/datalab-industries/datalab-app-plugin-xps" }
+# Ansible roles will copy this dep into the plugins directory, so we can reference it as a path dependency here
+datalab-app-plugin-tubgeneric = { path = "pydatalab/plugins/datalab-app-plugin-tubgeneric" }
